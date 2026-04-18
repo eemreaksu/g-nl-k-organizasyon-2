@@ -237,7 +237,7 @@ export default function App() {
                   </div>
                 </div>
                 
-                <div className="relative cursor-pointer hover:opacity-80 transition-opacity ml-auto">
+                <label className="relative block cursor-pointer hover:opacity-80 transition-opacity ml-auto">
                   <div className="flex items-center space-x-2 pb-1">
                     <div className="inline-flex items-center h-full align-middle">
                         <Calendar size={20} color="#c2ff00" className="mt-[1px]" />
@@ -256,12 +256,12 @@ export default function App() {
                       try {
                         e.target.showPicker();
                       } catch (err) {
-                        // Browser might not support showPicker or it's already shown, which is fine.
+                        // Fallback
                       }
                     }}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20 m-0 p-0"
+                    className="date-input-overlay"
                   />
-                </div>
+                </label>
               </div>
 
               <div className="grid grid-cols-4 gap-2 md:gap-4 mb-8">
@@ -411,7 +411,7 @@ export default function App() {
                   </div>
                 </div>
                 
-                <div className="relative cursor-pointer hover:opacity-80 transition-opacity ml-auto">
+                <label className="relative block cursor-pointer hover:opacity-80 transition-opacity ml-auto">
                   <div className="flex items-center space-x-2 pb-1">
                     <div className="inline-flex items-center h-full align-middle">
                         <Calendar size={20} color="#c2ff00" className="mt-[1px]" />
@@ -430,12 +430,12 @@ export default function App() {
                       try {
                         e.target.showPicker();
                       } catch (err) {
-                        // Browser might not support showPicker or it's already shown, which is fine.
+                        // Fallback
                       }
                     }}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20 m-0 p-0"
+                    className="date-input-overlay"
                   />
-                </div>
+                </label>
               </div>
 
               <div className="relative bg-[#2b3e94] rounded shadow-sm border border-white/20 overflow-hidden flex flex-col text-sm md:text-base w-full">

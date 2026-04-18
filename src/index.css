@@ -4,8 +4,25 @@
   --font-sans: "Inter", system-ui, sans-serif;
 }
 
-/* Safari ve Chrome'da opacity-0 olan date inputlara tıklanınca takvimin açılması için */
-input[type="date"]::-webkit-calendar-picker-indicator {
+/* Safari (iOS ve Mac) ve Chrome'da gizli input tıklamalarını daha güvenilir hale getirmek için */
+.date-input-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    opacity: 0.01; /* Safari bazen opacity:0 olan elemanlardaki eventleri iptal edebilir, 0.01 güvenlidir */
+    cursor: pointer;
+    background: transparent;
+    color: transparent;
+    border: none;
+    outline: none;
+    z-index: 20;
+    -webkit-appearance: none; /* Safari yerel stilini sıfırlar */
+}
+
+.date-input-overlay::-webkit-calendar-picker-indicator {
     position: absolute;
     inset: 0;
     width: 100%;
