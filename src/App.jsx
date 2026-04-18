@@ -123,15 +123,7 @@ export default function App() {
     return emp ? emp.name : '-';
   };
 
-  const handleCalendarClick = (ref) => {
-    if (ref.current) {
-      if (typeof ref.current.showPicker === 'function') {
-        ref.current.showPicker();
-      } else {
-        ref.current.focus();
-      }
-    }
-  };
+
 
   const formattedDate = new Date(selectedDate).toLocaleDateString('tr-TR', { 
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
@@ -245,8 +237,8 @@ export default function App() {
                   </div>
                 </div>
                 
-                <div className="relative cursor-pointer hover:opacity-80 transition-opacity ml-auto" onClick={() => handleCalendarClick(dateInputRefStore)}>
-                  <div className="flex items-center space-x-2">
+                <div className="relative cursor-pointer hover:opacity-80 transition-opacity ml-auto">
+                  <div className="flex items-center space-x-2 pb-1">
                     <div className="inline-flex items-center h-full align-middle">
                         <Calendar size={20} color="#c2ff00" className="mt-[1px]" />
                     </div>
@@ -257,12 +249,10 @@ export default function App() {
                     </div>
                   </div>
                   <input 
-                    ref={dateInputRefStore}
                     type="date" 
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className="absolute bottom-0 right-0 w-10 h-10 opacity-0 pointer-events-none"
-                    style={{ visibility: 'hidden' }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20 m-0 p-0"
                   />
                 </div>
               </div>
@@ -414,8 +404,8 @@ export default function App() {
                   </div>
                 </div>
                 
-                <div className="relative cursor-pointer hover:opacity-80 transition-opacity ml-auto" onClick={() => handleCalendarClick(dateInputRefCheckout)}>
-                  <div className="flex items-center space-x-2">
+                <div className="relative cursor-pointer hover:opacity-80 transition-opacity ml-auto">
+                  <div className="flex items-center space-x-2 pb-1">
                     <div className="inline-flex items-center h-full align-middle">
                         <Calendar size={20} color="#c2ff00" className="mt-[1px]" />
                     </div>
@@ -426,12 +416,10 @@ export default function App() {
                     </div>
                   </div>
                   <input 
-                    ref={dateInputRefCheckout}
                     type="date" 
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className="absolute bottom-0 right-0 w-10 h-10 opacity-0 pointer-events-none"
-                    style={{ visibility: 'hidden' }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20 m-0 p-0"
                   />
                 </div>
               </div>
