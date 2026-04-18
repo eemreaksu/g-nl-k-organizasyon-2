@@ -252,6 +252,13 @@ export default function App() {
                     type="date" 
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
+                    onClick={(e) => {
+                      try {
+                        e.target.showPicker();
+                      } catch (err) {
+                        // Browser might not support showPicker or it's already shown, which is fine.
+                      }
+                    }}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20 m-0 p-0"
                   />
                 </div>
@@ -419,6 +426,13 @@ export default function App() {
                     type="date" 
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
+                    onClick={(e) => {
+                      try {
+                        e.target.showPicker();
+                      } catch (err) {
+                        // Browser might not support showPicker or it's already shown, which is fine.
+                      }
+                    }}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20 m-0 p-0"
                   />
                 </div>
