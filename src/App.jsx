@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 
@@ -33,7 +33,7 @@ export default function App() {
   return (
     <AuthProvider>
       <DataProvider>
-        <BrowserRouter>
+        <Router>
           <Routes>
             <Route path="/" element={<Login />} />
             
@@ -81,7 +81,7 @@ export default function App() {
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </BrowserRouter>
+        </Router>
       </DataProvider>
     </AuthProvider>
   );
