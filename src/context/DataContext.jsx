@@ -38,6 +38,8 @@ export function DataProvider({ children }) {
   
   const [allDailyShifts, setAllDailyShiftsLocal] = useState({});
   const [allDailySales, setAllDailySalesLocal] = useState({});
+  const [allDailyActualSales, setAllDailyActualSalesLocal] = useState({});
+  const [allDailyMVPs, setAllDailyMVPsLocal] = useState({});
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -88,13 +90,19 @@ export function DataProvider({ children }) {
     const unsubscribeDaily = onSnapshot(collection(db, 'dailyData'), (snapshot) => {
       const newShifts = {};
       const newSales = {};
+      const newActualSales = {};
+      const newMVPs = {};
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
         newShifts[docSnap.id] = data.shifts || [];
         newSales[docSnap.id] = data.manualSales || {};
+        newActualSales[docSnap.id] = data.actualSales || {};
+        newMVPs[docSnap.id] = data.mvps || [];
       });
       setAllDailyShiftsLocal(newShifts);
       setAllDailySalesLocal(newSales);
+      setAllDailyActualSalesLocal(newActualSales);
+      setAllDailyMVPsLocal(newMVPs);
     });
 
     return () => {
@@ -139,13 +147,33 @@ export function DataProvider({ children }) {
     });
   };
 
+  const updateDailyActualSales = (date, nextSalesOrFn) => {
+    setAllDailyActualSalesLocal(prev => {
+      const current = prev[date] || {};
+      const next = typeof nextSalesOrFn === 'function' ? nextSalesOrFn(current) : nextSalesOrFn;
+      setDoc(doc(db, 'dailyData', date), { actualSales: next }, { merge: true });
+      return { ...prev, [date]: next };
+    });
+  };
+
+  const updateDailyMVPs = (date, nextMVPsOrFn) => {
+    setAllDailyMVPsLocal(prev => {
+      const current = prev[date] || [];
+      const next = typeof nextMVPsOrFn === 'function' ? nextMVPsOrFn(current) : nextMVPsOrFn;
+      setDoc(doc(db, 'dailyData', date), { mvps: next }, { merge: true });
+      return { ...prev, [date]: next };
+    });
+  };
+
   const value = {
     departments, setDepartments,
     users, setUsers,
     captainSchedule, setCaptainSchedule,
     rekor, setRekor,
     allDailyShifts, updateDailyShifts,
-    allDailySales, updateDailySales
+    allDailySales, updateDailySales,
+    allDailyActualSales, updateDailyActualSales,
+    allDailyMVPs, updateDailyMVPs
   };
 
   if (!isReady) {

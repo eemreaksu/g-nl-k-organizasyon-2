@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Download, CalendarIcon, Plus, Trash2, Edit3, CheckCircle, MapPin, Trophy } from 'lucide-react';
+import { Download, CalendarIcon, Plus, Trash2, Edit3, CheckCircle, MapPin, Trophy, RotateCcw } from 'lucide-react';
 import { toJpeg } from 'html-to-image';
 import { useData } from '../../context/DataContext';
+import DailyActuals from '../../components/DailyActuals';
 
 const ROLES = [
   { id: '', label: 'Görev Yok' },
@@ -17,6 +18,20 @@ for (let h = 0; h < 24; h++) {
   const hh = h.toString().padStart(2, '0');
   ['00', '15', '30', '45'].forEach(mm => TIME_OPTIONS.push(`${hh}:${mm}`));
 }
+
+const addTenHours = (timeStr) => {
+  if (!timeStr) return '';
+  let [h, m] = timeStr.split(':').map(Number);
+  h = (h + 10) % 24;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+};
+
+const addOneHour = (timeStr) => {
+  if (!timeStr) return '';
+  let [h, m] = timeStr.split(':').map(Number);
+  h = (h + 1) % 24;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+};
 
 // Helper to format number with spaces
 const formatRekor = (value) => {
@@ -75,18 +90,42 @@ export default function DailyOrganization() {
   // We'll mock that by resetting them (or keeping them for now).
   
   const handleShiftChange = (shiftId, field, value) => {
-    setShifts(prev => {
-      const exists = prev.find(s => s.id === shiftId);
-      if (exists) {
-        return prev.map(s => s.id === shiftId ? { ...s, [field]: value } : s);
+    // Yetkili (Kaptan) kontrolü
+    const isCaptainRole = (role) => ['AK', 'AA', 'KK', 'KA'].includes(role);
+    
+    let targetUserId = null;
+    let targetRole = null;
+    
+    const currentShift = shifts.find(s => s.id === shiftId);
+    
+    if (field === 'role') {
+      targetRole = value;
+      targetUserId = currentShift ? currentShift.userId : null;
+    } else if (field === 'userId') {
+      targetUserId = value;
+      targetRole = currentShift ? currentShift.role : null;
+    }
+
+    if (targetUserId && targetRole && isCaptainRole(targetRole)) {
+      const user = users.find(u => u.id === targetUserId);
+      if (user && user.isCaptain !== 1) {
+        alert('Lütfen yetkili kişi seçiniz');
+        return; // İşlemi iptal et
       }
+    }
+
+    setShifts(prev => {
+      let nextPrev = [...prev];
+      const exists = nextPrev.find(s => s.id === shiftId);
       
-      // If it's a padded shift being edited for the first time, instantiate it
-      if (shiftId.startsWith('empty-')) {
+      let updatedShift;
+
+      if (exists) {
+        updatedShift = { ...exists, [field]: value };
+      } else if (shiftId.startsWith('empty-')) {
         const parts = shiftId.split('-');
-        // Extract deptId correctly even if it has hyphens (though our deptIds don't currently)
         const deptId = parts.slice(1, -1).join('-'); 
-        return [...prev, {
+        updatedShift = {
           id: shiftId,
           deptId,
           userId: '',
@@ -96,22 +135,70 @@ export default function DailyOrganization() {
           breakEnd: '',
           role: '',
           [field]: value
-        }];
+        };
+      } else {
+        return prev;
+      }
+
+      const applyAutoBreaks = (shift) => {
+        const start = shift.shiftStart;
+        if (!start) return;
+        if (start >= '07:00' && start < '09:00') {
+          shift.breakStart = '13:00';
+          shift.breakEnd = '14:00';
+        } else if (start >= '09:00' && start <= '10:00') {
+          shift.breakStart = '14:00';
+          shift.breakEnd = '15:00';
+        } else if (start === '12:00' || start === '12:15') {
+          shift.breakStart = '16:00';
+          shift.breakEnd = '17:00';
+        } else if (start === '12:30' || start === '13:00' || start === '14:00') {
+          shift.breakStart = '17:00';
+          shift.breakEnd = '18:00';
+        }
+      };
+
+      // Kullanıcı seçildiğinde otomatik 09:30 - 19:30 yap
+      if (field === 'userId' && value && !updatedShift.shiftStart) {
+        updatedShift.shiftStart = '09:30';
+        updatedShift.shiftEnd = '19:30';
+        applyAutoBreaks(updatedShift);
+      }
+
+      // Başlangıç saati değiştiğinde otomatik 10 saat sonrasını bitiş olarak ayarla ve molayı ayarla
+      if (field === 'shiftStart' && value) {
+        updatedShift.shiftEnd = addTenHours(value);
+        applyAutoBreaks(updatedShift);
       }
       
-      return prev;
+      // Mola başlangıç değiştiğinde mola bitişini 1 saat sonrası yap
+      if (field === 'breakStart' && value) {
+        updatedShift.breakEnd = addOneHour(value);
+      }
+
+      if (exists) {
+        return nextPrev.map(s => s.id === shiftId ? updatedShift : s);
+      } else {
+        return [...nextPrev, updatedShift];
+      }
     });
   };
 
   const addShift = (deptId) => {
     const newId = Date.now().toString();
     setShifts([...shifts, {
-      id: newId, deptId, userId: '', shiftStart: '09:00', shiftEnd: '18:00', breakStart: '13:00', breakEnd: '14:00', role: ''
+      id: newId, deptId, userId: '', shiftStart: '09:30', shiftEnd: '19:30', breakStart: '14:00', breakEnd: '15:00', role: ''
     }]);
   };
 
   const deleteShift = (id) => {
     setShifts(prev => prev.filter(s => s.id !== id));
+  };
+
+  const resetShifts = () => {
+    if (window.confirm(`${formattedDate} tarihli tüm shift ve mola organizasyonunu sıfırlamak istediğinize emin misiniz?`)) {
+      setShifts([]);
+    }
   };
 
   const formattedDate = new Date(selectedDate).toLocaleDateString('tr-TR', { 
@@ -182,6 +269,13 @@ export default function DailyOrganization() {
           >
             {isEditMode ? <CheckCircle size={16} /> : <Edit3 size={16} />}
             <span>{isEditMode ? 'Bitir' : 'Düzenle'}</span>
+          </button>
+          <button 
+            onClick={resetShifts}
+            className="flex items-center space-x-2 bg-white text-red-600 hover:bg-red-50 border border-red-200 px-4 py-2 rounded-lg font-bold shadow-sm transition-all active:scale-95"
+          >
+            <RotateCcw size={16} />
+            <span>Sıfırla</span>
           </button>
           <button 
             onClick={exportImage}
@@ -282,23 +376,28 @@ export default function DailyOrganization() {
               </div>
 
               {departments.map(dept => {
-                let deptShifts = shifts.filter(s => s.deptId === dept.id);
+                let deptShifts = [...shifts.filter(s => s.deptId === dept.id)];
                 
                 // Pad to show at least 2 empty rows
                 const minRows = 2;
                 if (deptShifts.length < minRows) {
                   const paddingCount = minRows - deptShifts.length;
-                  const padding = Array.from({ length: paddingCount }).map((_, i) => ({
-                    id: `empty-${dept.id}-${i}`,
-                    deptId: dept.id,
-                    userId: '',
-                    shiftStart: '',
-                    shiftEnd: '',
-                    breakStart: '',
-                    breakEnd: '',
-                    role: ''
-                  }));
-                  deptShifts = [...deptShifts, ...padding];
+                  for (let i = 0; i < paddingCount; i++) {
+                    let suffix = 0;
+                    while (deptShifts.find(s => s.id === `empty-${dept.id}-${suffix}`)) {
+                      suffix++;
+                    }
+                    deptShifts.push({
+                      id: `empty-${dept.id}-${suffix}`,
+                      deptId: dept.id,
+                      userId: '',
+                      shiftStart: '',
+                      shiftEnd: '',
+                      breakStart: '',
+                      breakEnd: '',
+                      role: ''
+                    });
+                  }
                 }
 
                 let deptTotalNet = 0;
@@ -443,6 +542,9 @@ export default function DailyOrganization() {
           </div>
         </div>
       </div>
+
+      {/* Gunun Gerceklesenleri (Actuals & MVPs) Table */}
+      <DailyActuals selectedDate={selectedDate} setSelectedDate={setSelectedDate} />
     </div>
   );
 }

@@ -16,19 +16,30 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = (userCode, password) => {
-    // Mock login logic
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        if (userCode === 'ADMIN' && password === 'mersin843') {
-          const user = { id: '1', role: 'admin', name: 'Admin', isCaptain: 1 };
+        const uc = userCode.toUpperCase();
+        
+        const resolveUser = (id, role, name, isCaptain) => {
+          const user = { id, role, name, isCaptain };
           setCurrentUser(user);
           localStorage.setItem('decathlonUser', JSON.stringify(user));
           resolve(user);
-        } else if (userCode === '12345' && password === 'decauser') {
-          const user = { id: '2', role: 'user', name: 'Test User', isCaptain: 0 };
-          setCurrentUser(user);
-          localStorage.setItem('decathlonUser', JSON.stringify(user));
-          resolve(user);
+        };
+
+        // Admins
+        if (uc === 'ADM9X' && password === 'Deca_Master843!') {
+          resolveUser('1', 'admin', 'Yönetici 1', 1);
+        } else if (uc === 'KPTN7' && password === 'TurkSport_77$X') {
+          resolveUser('2', 'admin', 'Yönetici 2', 1);
+        } else if (uc === 'LDR4V' && password === 'Organizasyon_Lideri#9') {
+          resolveUser('3', 'admin', 'Yönetici 3', 1);
+        } 
+        // Users
+        else if (uc === 'MERSI' && password === 'mersi843') {
+          resolveUser('4', 'user', 'Takım Arkadaşı 1', 0);
+        } else if (uc === 'DECA2' && password === 'deca_spor843') {
+          resolveUser('5', 'user', 'Takım Arkadaşı 2', 0);
         } else {
           reject(new Error('Kullanıcı kodu veya şifre hatalı.'));
         }

@@ -186,8 +186,7 @@ export default function Login() {
               </form>
               
               <div className="mt-8 text-center text-white/40 text-xs font-medium leading-relaxed">
-                <span className="text-[#c2ff00]">Admin:</span> Kodu <strong>ADMIN</strong>, şifre <strong>mersin843</strong> <br/>
-                <span className="text-white/60">Demo User:</span> Kodu <strong>12345</strong>, şifre <strong>decauser</strong>
+                Bu sistem sadece yetkili Mersin Turksport personeli içindir.
               </div>
             </div>
           </div>
