@@ -258,21 +258,21 @@ export default function DailyOrganization() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-end mb-2 mt-4 md:mt-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-2 mt-4 md:mt-0 gap-4">
         <h2 className="text-xl font-bold text-gray-700 flex items-center gap-2">
           Günün Organizasyonu
         </h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <button 
             onClick={() => setIsEditMode(!isEditMode)}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm ${isEditMode ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
+            className={`flex-1 sm:flex-none flex items-center justify-center space-x-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm ${isEditMode ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
           >
             {isEditMode ? <CheckCircle size={16} /> : <Edit3 size={16} />}
             <span>{isEditMode ? 'Bitir' : 'Düzenle'}</span>
           </button>
           <button 
             onClick={resetShifts}
-            className="flex items-center space-x-2 bg-white text-red-600 hover:bg-red-50 border border-red-200 px-4 py-2 rounded-lg font-bold shadow-sm transition-all active:scale-95"
+            className="flex-1 sm:flex-none flex items-center justify-center space-x-2 bg-white text-red-600 hover:bg-red-50 border border-red-200 px-4 py-2 rounded-lg font-bold shadow-sm transition-all active:scale-95"
           >
             <RotateCcw size={16} />
             <span>Sıfırla</span>
@@ -280,15 +280,19 @@ export default function DailyOrganization() {
           <button 
             onClick={exportImage}
             disabled={isExporting}
-            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold shadow-md transition-all active:scale-95 disabled:opacity-50"
+            className="flex-1 sm:flex-none flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold shadow-md transition-all active:scale-95 disabled:opacity-50"
           >
             <Download size={16} />
-            <span>{isExporting ? 'Çekiliyor...' : 'İndir'}</span>
+            <span>{isExporting ? '...' : 'İndir'}</span>
           </button>
         </div>
       </div>
 
-      <div className="w-full overflow-x-auto pb-10">
+      <div className="md:hidden text-center text-xs text-gray-500 font-medium mb-1 animate-pulse">
+        👈 Tabloyu yana kaydırarak detayları gör
+      </div>
+
+      <div className="w-full overflow-x-auto pb-6 custom-scrollbar">
         <div ref={captureRef} className="bg-[#2b3e94] p-6 md:p-10 rounded-xl shadow-2xl relative overflow-hidden text-white min-w-[900px] w-full">
           <div 
             className="absolute inset-0 z-0 opacity-5 mix-blend-overlay pointer-events-none"
@@ -354,7 +358,7 @@ export default function DailyOrganization() {
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               <RoleCard title="Açılış Kaptanı" name={getDailyRoleName('AK')} color="text-amber-300" />
               <RoleCard title="Açılış Aprantisi" name={getDailyRoleName('AA')} color="text-yellow-200" />
               <RoleCard title="Kapanış Kaptanı" name={getDailyRoleName('KK')} color="text-blue-300" />

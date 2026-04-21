@@ -121,14 +121,14 @@ export default function DailyActuals({ selectedDate, setSelectedDate }) {
         </p>
       </div>
 
-      <div className="flex justify-between items-end mb-2 mt-4 md:mt-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-2 mt-4 md:mt-6 gap-4">
         <h2 className="text-xl font-bold text-gray-700 flex items-center gap-2">
           <TrendingUp className="text-blue-600" /> Günün Gerçekleşenleri
         </h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <button 
             onClick={() => setIsEditMode(!isEditMode)}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm ${isEditMode ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
+            className={`flex-1 sm:flex-none flex items-center justify-center space-x-2 px-4 py-2 rounded-lg font-bold transition-all shadow-sm ${isEditMode ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
           >
             {isEditMode ? <CheckCircle size={16} /> : <Edit3 size={16} />}
             <span>{isEditMode ? 'Bitir' : 'Düzenle'}</span>
@@ -136,15 +136,19 @@ export default function DailyActuals({ selectedDate, setSelectedDate }) {
           <button 
             onClick={exportImage}
             disabled={isExporting}
-            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold shadow-md transition-all active:scale-95 disabled:opacity-50"
+            className="flex-1 sm:flex-none flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold shadow-md transition-all active:scale-95 disabled:opacity-50"
           >
             <Download size={16} />
-            <span>{isExporting ? 'Çekiliyor...' : 'İndir'}</span>
+            <span>{isExporting ? '...' : 'İndir'}</span>
           </button>
         </div>
       </div>
 
-      <div className="w-full overflow-x-auto pb-10">
+      <div className="md:hidden text-center text-xs text-gray-500 font-medium mb-1 animate-pulse">
+        👈 Tabloyu yana kaydırarak detayları gör
+      </div>
+
+      <div className="w-full overflow-x-auto pb-6 custom-scrollbar">
         <div ref={captureRef} className="bg-[#2b3e94] p-6 md:p-10 rounded-xl shadow-2xl relative overflow-hidden text-white min-w-[900px] w-full">
           <div 
             className="absolute inset-0 z-0 opacity-5 mix-blend-overlay pointer-events-none"
@@ -225,14 +229,14 @@ export default function DailyActuals({ selectedDate, setSelectedDate }) {
                   )}
                </div>
                
-               <div className="grid grid-cols-3 gap-4 relative z-10">
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-10">
                   {mvps.length === 0 && !isEditMode && (
-                    <div className="col-span-3 text-white/50 italic font-medium">Henüz MVP seçilmedi.</div>
+                    <div className="col-span-full text-white/50 italic font-medium text-center py-4">Henüz MVP seçilmedi.</div>
                   )}
                   {mvps.map((mvpId, idx) => {
                     const userObj = users.find(u => u.id === mvpId);
                     return (
-                      <div key={idx} className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-lg p-3 flex flex-col items-center justify-center relative group">
+                      <div key={idx} className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-lg p-4 flex flex-col items-center justify-center relative group min-h-[100px]">
                         {isEditMode ? (
                            <div className="w-full flex items-center gap-2">
                              <select 
@@ -244,7 +248,6 @@ export default function DailyActuals({ selectedDate, setSelectedDate }) {
                                {todayUsers.map(u => (
                                  <option key={u.id} value={u.id}>{u.name}</option>
                                ))}
-                               {/* Add all users just in case they want someone not in schedule */}
                                {todayUsers.length === 0 && users.map(u => (
                                  <option key={u.id} value={u.id}>{u.name}</option>
                                ))}
