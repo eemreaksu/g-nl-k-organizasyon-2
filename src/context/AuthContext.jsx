@@ -1,62 +1,132 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { auth, db } from '../firebase/config';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 
 const AuthContext = createContext();
+
+// Firebase ID Token'ları 1 saat geçerlidir.
+// Her 50 dakikada bir yeniliyoruz ki oturum süresi dolmasın.
+const TOKEN_REFRESH_INTERVAL = 50 * 60 * 1000;
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const tokenRefreshTimer = useRef(null);
 
-  useEffect(() => {
-    // Mock check for existing session
-    const storedUser = localStorage.getItem('decathlonUser');
-    if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
-  }, []);
-
-  const login = (userCode, password) => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const uc = userCode.toUpperCase();
-        
-        const resolveUser = (id, role, name, isCaptain) => {
-          const user = { id, role, name, isCaptain };
-          setCurrentUser(user);
-          localStorage.setItem('decathlonUser', JSON.stringify(user));
-          resolve(user);
-        };
-
-        // Admins
-        if (uc === 'ADM9X' && password === 'Deca_Master843!') {
-          resolveUser('1', 'admin', 'Yönetici 1', 1);
-        } else if (uc === 'KPTN7' && password === 'TurkSport_77$X') {
-          resolveUser('2', 'admin', 'Yönetici 2', 1);
-        } else if (uc === 'LDR4V' && password === 'Organizasyon_Lideri#9') {
-          resolveUser('3', 'admin', 'Yönetici 3', 1);
-        } 
-        // Users
-        else if (uc === 'MERSI' && password === 'mersi843') {
-          resolveUser('4', 'user', 'Takım Arkadaşı 1', 0);
-        } else if (uc === 'DECA2' && password === 'deca_spor843') {
-          resolveUser('5', 'user', 'Takım Arkadaşı 2', 0);
-        } else {
-          reject(new Error('Kullanıcı kodu veya şifre hatalı.'));
-        }
-      }, 500);
-    });
+  /**
+   * Kullanıcının güncel JWT ID Token'ını döndürür.
+   * forceRefresh=true ile Firebase'den yeni token çeker.
+   * Bu token sunucuya veya Firestore'a gönderildiğinde,
+   * Firebase altyapısı imzayı doğrular — client-side manipülasyon imkânsızdır.
+   */
+  const getIdToken = async (forceRefresh = false) => {
+    const user = auth.currentUser;
+    if (!user) return null;
+    return user.getIdToken(forceRefresh);
   };
 
-  const logout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem('decathlonUser');
+  /**
+   * Token yenileme döngüsünü başlatır.
+   * Her 50 dakikada bir çalışır.
+   */
+  const startTokenRefresh = () => {
+    if (tokenRefreshTimer.current) clearInterval(tokenRefreshTimer.current);
+    tokenRefreshTimer.current = setInterval(async () => {
+      try {
+        await getIdToken(true); // forceRefresh — yeni JWT al
+      } catch {
+        // Token yenilenemezse (örn. kullanıcı Firebase'den silinmiş),
+        // oturumu kapat.
+        await signOut(auth);
+      }
+    }, TOKEN_REFRESH_INTERVAL);
+  };
+
+  const stopTokenRefresh = () => {
+    if (tokenRefreshTimer.current) {
+      clearInterval(tokenRefreshTimer.current);
+      tokenRefreshTimer.current = null;
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          // ─── JWT ID Token'ı al ve decode et ───────────────────────────
+          // getIdTokenResult() token'ı çözer; claims içindeki bilgiler
+          // Firebase'in private key'iyle imzalandığı için manipüle edilemez.
+          const tokenResult = await firebaseUser.getIdTokenResult();
+          const claims = tokenResult.claims; // custom claims (admin set ederse)
+
+          // ─── Firestore'dan rol bilgisini çek ──────────────────────────
+          // NOT: Custom Claims yoksa Firestore'a fallback yapıyoruz.
+          // Gerçek prodüksiyonda Firebase Admin SDK ile Custom Claims set edin.
+          let role = claims.role || null; // Cloud Function set ettiyse buradan gelir
+          let name = claims.name || null;
+          let isCaptain = claims.isCaptain || 0;
+
+          if (!role) {
+            // Custom claim yoksa Firestore'dan oku
+            const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+            if (userDoc.exists()) {
+              const data = userDoc.data();
+              role = data.role || 'user';
+              name = data.name || firebaseUser.email;
+              isCaptain = data.isCaptain || 0;
+            } else {
+              role = 'user';
+              name = firebaseUser.email;
+            }
+          }
+
+          setCurrentUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            role,
+            name,
+            isCaptain,
+          });
+
+          startTokenRefresh();
+        } catch {
+          // Hata detayı sızdırma — loglama servisi kullanılabilir
+          setCurrentUser(null);
+          stopTokenRefresh();
+        }
+      } else {
+        setCurrentUser(null);
+        stopTokenRefresh();
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribe();
+      stopTokenRefresh();
+    };
+  }, []);
+
+  const login = (email, password) => {
+    return signInWithEmailAndPassword(auth, email, password);
+  };
+
+  const logout = async () => {
+    stopTokenRefresh();
+    return signOut(auth);
   };
 
   const value = {
     currentUser,
     login,
     logout,
-    loading
+    loading,
+    getIdToken, // Gerekirse component'lardan token alınabilir
   };
 
   return (

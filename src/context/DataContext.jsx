@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from '../firebase/config';
 import { doc, collection, setDoc, onSnapshot } from 'firebase/firestore';
+import { useAuth } from './AuthContext';
 
 const DataContext = createContext();
 
@@ -176,7 +177,9 @@ export function DataProvider({ children }) {
     allDailyMVPs, updateDailyMVPs
   };
 
-  if (!isReady) {
+  const { currentUser, loading: authLoading } = useAuth();
+
+  if (authLoading || (currentUser && !isReady)) {
     return <div className="min-h-screen flex items-center justify-center bg-[#1e2b6e] text-white font-bold text-xl uppercase tracking-widest">Sistem Yükleniyor...</div>;
   }
 

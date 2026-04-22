@@ -1,19 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Activity, ArrowRight, LockIcon, UserIcon } from 'lucide-react';
+import { Activity, ArrowRight, LockIcon, UserIcon, AlertTriangle } from 'lucide-react';
+import { checkRateLimit, recordFailedAttempt, clearAttempts, getRemainingAttempts } from '../utils/rateLimiter';
 
 export default function Login() {
   const [userCode, setUserCode] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [remainingAttempts, setRemainingAttempts] = useState(5);
+  const [isLocked, setIsLocked] = useState(false);
   const { login, currentUser } = useAuth();
   const navigate = useNavigate();
 
+  // Sayfa açılınca mevcut kısıtlamayı kontrol et
+  useEffect(() => {
+    setRemainingAttempts(getRemainingAttempts());
+    try {
+      checkRateLimit(); // Kilitli değilse hata atmaz
+      setIsLocked(false);
+    } catch {
+      setIsLocked(true);
+      setError('Hesap geçici olarak kilitlendi. Lütfen bekleyin.');
+    }
+  }, []);
+
   // Auto-redirect if already logged in
-  React.useEffect(() => {
+  useEffect(() => {
     if (currentUser && !isLoading) {
       if (currentUser.role === 'admin') {
         navigate('/admin');
@@ -26,17 +41,35 @@ export default function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-    setIsLoading(true);
-    
+
+    // ── Brute-force koruma: Kilitli mi? ──────────────────────────
     try {
-      const user = await login(userCode, password);
-      if (user.role === 'admin') {
-        navigate('/admin');
+      checkRateLimit();
+    } catch (lockErr) {
+      setError(lockErr.message);
+      setIsLocked(true);
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const email = `${userCode.toLowerCase()}@mersin.local`;
+      await login(email, password);
+      clearAttempts(); // Başarılı girişte sayacı sıfırla
+      // Yönlendirme useEffect ile yapılıyor
+    } catch {
+      // ── Hata detayını sızdırma ────────────────────────────────
+      // Firebase hata kodunu (auth/wrong-password vs.) asla gösterme.
+      const remaining = recordFailedAttempt();
+      setRemainingAttempts(remaining);
+
+      if (remaining <= 0) {
+        setIsLocked(true);
+        setError('Çok fazla başarısız giriş. Hesap 5 dakika kilitlendi.');
       } else {
-        navigate('/user');
+        setError(`Kullanıcı kodu veya şifre hatalı. (${remaining} hak kaldı)`);
       }
-    } catch (err) {
-      setError(err.message || 'Giriş başarısız. Bilgilerinizi kontrol edin.');
     } finally {
       setIsLoading(false);
     }
@@ -143,9 +176,13 @@ export default function Login() {
                     <input
                       type="text"
                       maxLength={5}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      disabled={isLocked || isLoading}
                       value={userCode}
                       onChange={(e) => setUserCode(e.target.value.toUpperCase())}
-                      className="w-full bg-black/30 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#c2ff00] focus:ring-1 focus:ring-[#c2ff00] transition-all font-bold tracking-widest uppercase"
+                      className="w-full bg-black/30 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#c2ff00] focus:ring-1 focus:ring-[#c2ff00] transition-all font-bold tracking-widest uppercase disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="5 Haneli Kod"
                       required
                     />
@@ -160,9 +197,11 @@ export default function Login() {
                     </div>
                     <input
                       type="password"
+                      autoComplete="current-password"
+                      disabled={isLocked || isLoading}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-black/30 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#c2ff00] focus:ring-1 focus:ring-[#c2ff00] transition-all font-bold tracking-wider"
+                      className="w-full bg-black/30 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#c2ff00] focus:ring-1 focus:ring-[#c2ff00] transition-all font-bold tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="••••••"
                       required
                     />
@@ -170,14 +209,16 @@ export default function Login() {
                 </div>
 
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  disabled={isLoading}
+                  whileHover={{ scale: isLocked ? 1 : 1.02 }}
+                  whileTap={{ scale: isLocked ? 1 : 0.98 }}
+                  disabled={isLoading || isLocked}
                   type="submit"
-                  className="w-full bg-[#c2ff00] hover:bg-[#a8e600] text-[#1e2b6e] font-black uppercase tracking-widest py-4 rounded-xl shadow-[0_0_20px_rgba(194,255,0,0.3)] hover:shadow-[0_0_30px_rgba(194,255,0,0.5)] transition-all flex items-center justify-center gap-2 group mt-8 relative overflow-hidden"
+                  className="w-full bg-[#c2ff00] hover:bg-[#a8e600] text-[#1e2b6e] font-black uppercase tracking-widest py-4 rounded-xl shadow-[0_0_20px_rgba(194,255,0,0.3)] hover:shadow-[0_0_30px_rgba(194,255,0,0.5)] transition-all flex items-center justify-center gap-2 group mt-8 relative overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none"
                 >
-                  <span className="relative z-10">{isLoading ? 'Giriş Yapılıyor...' : 'Sisteme Gir'}</span>
-                  {!isLoading && (
+                  <span className="relative z-10">
+                    {isLocked ? '🔒 Kilitli' : isLoading ? 'Giriş Yapılıyor...' : 'Sisteme Gir'}
+                  </span>
+                  {!isLoading && !isLocked && (
                     <ArrowRight size={20} className="relative z-10 group-hover:translate-x-1 transition-transform" />
                   )}
                   {/* Button shine effect */}
