@@ -51,24 +51,46 @@ export default function Login() {
       return;
     }
 
+    // ── Kullanıcı kodu boş mu? ────────────────────────────────
+    if (!userCode.trim()) {
+      setError('Lütfen kullanıcı kodunuzu girin.');
+      return;
+    }
+    if (!password) {
+      setError('Lütfen şifrenizi girin.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const email = `${userCode.toLowerCase()}@mersin.local`;
+      // Kullanıcı kodu + @mersin.local formatına çevir
+      // Eğer kullanıcı zaten tam email girdiyse onu kullan
+      const rawCode = userCode.trim().toLowerCase();
+      const email = rawCode.includes('@') ? rawCode : `${rawCode}@mersin.local`;
+
       await login(email, password);
-      clearAttempts(); // Başarılı girişte sayacı sıfırla
+      clearAttempts();
       // Yönlendirme useEffect ile yapılıyor
-    } catch {
-      // ── Hata detayını sızdırma ────────────────────────────────
-      // Firebase hata kodunu (auth/wrong-password vs.) asla gösterme.
+    } catch (err) {
+      // ── Hata mesajını Firebase koduna göre özelleştir ─────────
+      // Hata kodunu sızdırma, sadece anlamlı Türkçe mesaj ver.
+      const code = err?.code || '';
       const remaining = recordFailedAttempt();
       setRemainingAttempts(remaining);
 
       if (remaining <= 0) {
         setIsLocked(true);
         setError('Çok fazla başarısız giriş. Hesap 5 dakika kilitlendi.');
+      } else if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
+        setError(`Bu kullanıcı kodu sistemde kayıtlı değil. (${remaining} hak kaldı)`);
+      } else if (code === 'auth/wrong-password') {
+        setError(`Şifre hatalı. (${remaining} hak kaldı)`);
+      } else if (code === 'auth/too-many-requests') {
+        setIsLocked(true);
+        setError('Firebase tarafından geçici olarak engellendi. Biraz bekleyin.');
       } else {
-        setError(`Kullanıcı kodu veya şifre hatalı. (${remaining} hak kaldı)`);
+        setError(`Giriş başarısız. Bilgilerinizi kontrol edin. (${remaining} hak kaldı)`);
       }
     } finally {
       setIsLoading(false);
@@ -175,7 +197,6 @@ export default function Login() {
                     </div>
                     <input
                       type="text"
-                      maxLength={5}
                       autoComplete="off"
                       autoCorrect="off"
                       spellCheck={false}
@@ -183,7 +204,7 @@ export default function Login() {
                       value={userCode}
                       onChange={(e) => setUserCode(e.target.value.toUpperCase())}
                       className="w-full bg-black/30 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#c2ff00] focus:ring-1 focus:ring-[#c2ff00] transition-all font-bold tracking-widest uppercase disabled:opacity-50 disabled:cursor-not-allowed"
-                      placeholder="5 Haneli Kod"
+                      placeholder="Kullanıcı Kodu"
                       required
                     />
                   </div>
@@ -202,7 +223,7 @@ export default function Login() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full bg-black/30 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#c2ff00] focus:ring-1 focus:ring-[#c2ff00] transition-all font-bold tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
-                      placeholder="••••••"
+                      placeholder="Şifrenizi girin"
                       required
                     />
                   </div>
