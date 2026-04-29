@@ -8,30 +8,33 @@ service cloud.firestore {
     }
 
     // Helper to check if user has admin role in Firestore
-    // WARNING: Admin privileges are verified SERVER-SIDE via JWT token claims
-    // Client-side state manipulation CANNOT bypass these checks.
+    // NOT: Admin privileges are verified SERVER-SIDE via JWT token claims
     function isAdmin() {
-      return isAuthenticated() && 
-        (
-          (request.auth.token.email != null && (
-            // Domain-restricted patterns — ONLY @mersin.local allowed
-            request.auth.token.email.matches('^adm.*@mersin\\.local$') ||
-            request.auth.token.email.matches('^deca.*@mersin\\.local$') ||
-            request.auth.token.email.matches('^kptn.*@mersin\\.local$') ||
-            request.auth.token.email.matches('^ldr.*@mersin\\.local$') ||
-            request.auth.token.email.matches('^yonetim.*@mersin\\.local$') ||
-            request.auth.token.email == 'admin@mersin.local'
-          )) ||
-          request.auth.token.role == 'admin' || 
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
-        );
+      return isAuthenticated() && (
+        // 1. Hardcoded admin email (primary fallback)
+        request.auth.token.email == 'admin@mersin.local' ||
+        // 2. Custom claim set via Firebase Admin SDK
+        request.auth.token.role == 'admin' ||
+        // 3. Firestore users document role
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
     }
 
     // Users collection rules
     match /users/{userId} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow write: if isAdmin();
+      // Kullanıcılar kendi dokümanını oluşturabilir (ilk giriş)
+      allow create: if request.auth.uid == userId;
+      allow update, delete: if isAdmin();
+    }
+
+    // Config collection — first creation allowed for any authenticated user
+    // so the app can bootstrap. Updates/deletes require admin.
+    match /config/{document=**} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
     }
 
     // Daily Data can be read by any authenticated user, but only written by admins
@@ -40,7 +43,7 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Default rules for all other collections (config, etc.)
+    // Default rules for all other collections
     match /{document=**} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
