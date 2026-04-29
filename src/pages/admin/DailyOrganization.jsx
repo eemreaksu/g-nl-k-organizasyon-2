@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Download, CalendarIcon, Plus, Trash2, Edit3, CheckCircle, MapPin, Trophy, RotateCcw } from 'lucide-react';
+import { Download, Share2, CalendarIcon, Plus, Trash2, Edit3, CheckCircle, MapPin, Trophy, RotateCcw } from 'lucide-react';
 import { toJpeg } from 'html-to-image';
 import { useData } from '../../context/DataContext';
 import DailyActuals from '../../components/DailyActuals';
@@ -66,7 +66,8 @@ export default function DailyOrganization() {
   const { 
     departments, users, captainSchedule, rekor, setRekor,
     allDailyShifts, updateDailyShifts,
-    allDailySales, updateDailySales
+    allDailySales, updateDailySales,
+    allDailyQuantity, updateDailyQuantity
   } = useData();
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
@@ -77,9 +78,11 @@ export default function DailyOrganization() {
   // Date specific state
   const shifts = allDailyShifts[selectedDate] || [];
   const manualDeptSales = allDailySales[selectedDate] || {};
+  const manualDeptQuantity = allDailyQuantity[selectedDate] || {};
   
   const setShifts = (newShiftsOrFn) => updateDailyShifts(selectedDate, newShiftsOrFn);
   const setManualDeptSales = (newSalesOrFn) => updateDailySales(selectedDate, newSalesOrFn);
+  const setManualDeptQuantity = (newQtyOrFn) => updateDailyQuantity(selectedDate, newQtyOrFn);
   
   const [isEditMode, setIsEditMode] = useState(false);
   const [isRekorEditMode, setIsRekorEditMode] = useState(false);
@@ -88,6 +91,52 @@ export default function DailyOrganization() {
 
   // We should ideally load 'shifts' from the backend for the selected date.
   // We'll mock that by resetting them (or keeping them for now).
+
+  // Otomatik kaptanları shift'e ekle
+  useEffect(() => {
+    const daySchedule = captainSchedule[selectedDate];
+    if (!daySchedule) return;
+
+    let hasChanges = false;
+    let newShifts = [...shifts];
+
+    ['AK', 'AA', 'KK', 'KA'].forEach(role => {
+      const captainUserId = daySchedule[role];
+      if (captainUserId) {
+        // Bu kullanıcının zaten shifti var mı?
+        const existingShift = newShifts.find(s => s.userId === captainUserId);
+        
+        // Bu rol zaten başka birisine verilmiş mi?
+        const roleTaken = newShifts.find(s => s.role === role);
+
+        if (!existingShift && !roleTaken) {
+          const u = users.find(user => user.id === captainUserId);
+          if (u) {
+            newShifts.push({
+              id: crypto.randomUUID(),
+              deptId: u.deptId,
+              userId: captainUserId,
+              shiftStart: '09:30',
+              shiftEnd: '19:30',
+              breakStart: '14:00',
+              breakEnd: '15:00',
+              role: role
+            });
+            hasChanges = true;
+          }
+        } else if (existingShift && !existingShift.role && !roleTaken) {
+            // Kullanıcı shifte ekli ama rolü yoksa ve rol başkasında değilse
+            existingShift.role = role;
+            hasChanges = true;
+        }
+      }
+    });
+
+    if (hasChanges) {
+       updateDailyShifts(selectedDate, newShifts);
+    }
+  }, [selectedDate, captainSchedule, allDailyShifts, users]);
+
   
   const handleShiftChange = (shiftId, field, value) => {
     // Yetkili (Kaptan) kontrolü
@@ -116,6 +165,17 @@ export default function DailyOrganization() {
 
     setShifts(prev => {
       let nextPrev = [...prev];
+      
+      // Kaptan veya apranti rolü atandığında, eski sahibinden rolü otomatik olarak al
+      if (field === 'role' && ['AK', 'AA', 'KK', 'KA'].includes(value)) {
+        nextPrev = nextPrev.map(s => {
+          if (s.role === value && s.id !== shiftId) {
+            return { ...s, role: '' };
+          }
+          return s;
+        });
+      }
+
       const exists = nextPrev.find(s => s.id === shiftId);
       
       let updatedShift;
@@ -185,7 +245,7 @@ export default function DailyOrganization() {
   };
 
   const addShift = (deptId) => {
-    const newId = Date.now().toString();
+    const newId = crypto.randomUUID();
     setShifts([...shifts, {
       id: newId, deptId, userId: '', shiftStart: '09:30', shiftEnd: '19:30', breakStart: '14:00', breakEnd: '15:00', role: ''
     }]);
@@ -231,6 +291,63 @@ export default function DailyOrganization() {
     }, 300); 
   };
 
+  const shareWhatsApp = async () => {
+    if (!captureRef.current) return;
+    const wasEditMode = isEditMode;
+    setIsEditMode(false);
+    setIsExporting(true);
+
+    // ⚠️ Popup engelini aşmak için window.open'i hemen (senkron) çağır,
+    // async işlem bitmeden önce açılmalı.
+    const waText = encodeURIComponent(
+      `843 Mersin Turksport - Mağaza Organizasyonu (${formattedDate})\n` +
+      `⬇️ Tablo dosya olarak eklendi, lütfen gönder.`
+    );
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    // Masaüstünde WhatsApp Web'i hemen aç (popup engelinden önce)
+    let waWindow = null;
+    if (!isMobile) {
+      waWindow = window.open(`https://web.whatsapp.com/send?text=${waText}`, '_blank');
+    }
+
+    setTimeout(async () => {
+      try {
+        const dataUrl = await toJpeg(captureRef.current, {
+          quality: 0.95,
+          backgroundColor: '#2b3e94',
+          pixelRatio: 2
+        });
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const file = new File([blob], `Magaza-Organizasyonu-${selectedDate}.jpg`, { type: 'image/jpeg' });
+
+        if (isMobile && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          // Mobil — native paylaşım menüsü (WhatsApp dahil)
+          await navigator.share({
+            title: `Mağaza Organizasyonu - ${formattedDate}`,
+            text: `843 Mersin Turksport - Mağaza Organizasyonu`,
+            files: [file]
+          });
+        } else {
+          // Masaüstü — Görsel indir (WhatsApp Web zaten açıldı)
+          const link = document.createElement('a');
+          link.download = `Magaza-Organizasyonu-${selectedDate}.jpg`;
+          link.href = dataUrl;
+          link.click();
+        }
+      } catch (err) {
+        if (err?.name !== 'AbortError') console.error('Paylaşım hatası:', err);
+        // Pencere açılamadıysa tekrar dene
+        if (waWindow === null && !isMobile) {
+          window.location.href = `https://web.whatsapp.com/send?text=${waText}`;
+        }
+      } finally {
+        setIsExporting(false);
+        if (wasEditMode) setIsEditMode(true);
+      }
+    }, 300);
+  };
+
   // Get users for a dept
   const getDeptUsers = (deptId) => users.filter(u => u.deptId === deptId);
 
@@ -253,8 +370,32 @@ export default function DailyOrganization() {
     return '-';
   };
 
-  let totalStoreRevenue = 0;
-  let totalStoreHours = 0;
+  // Precalculate totals to respect React purity
+  const totals = departments.reduce((acc, dept) => {
+    let deptShifts = shifts.filter(s => s.deptId === dept.id);
+    let deptTotalNet = deptShifts.reduce((net, s) => net + calculateNetHours(s.shiftStart, s.shiftEnd, s.breakStart, s.breakEnd), 0);
+    
+    const manualRev = manualDeptSales[dept.id];
+    const deptHedefCiro = manualRev !== undefined && manualRev !== '' ? Number(manualRev) : deptTotalNet * dept.targetProductivity;
+    
+    let calcQty = 0;
+    const ciroK = deptHedefCiro / 1000;
+    if (dept.id === 'quechua') calcQty = ciroK * 0.9;
+    else if (dept.id === 'kosu') calcQty = ciroK * 1.3;
+    else if (dept.id === 'su') calcQty = ciroK * 1.7;
+    else if (dept.id === 'triathlon') calcQty = ciroK * 7;
+    else if (dept.id === 'takim') calcQty = ciroK * 1.7;
+    else if (dept.id === 'bisiklet') calcQty = ciroK * 0.8;
+    else calcQty = ciroK * 1; // Default
+    
+    const manualQty = manualDeptQuantity[dept.id];
+    const deptHedefAdet = manualQty !== undefined && manualQty !== '' ? Number(manualQty) : calcQty;
+
+    acc.totalStoreHours += deptTotalNet;
+    acc.totalStoreRevenue += deptHedefCiro;
+    acc.totalStoreQuantity += deptHedefAdet;
+    return acc;
+  }, { totalStoreHours: 0, totalStoreRevenue: 0, totalStoreQuantity: 0 });
 
   return (
     <div className="space-y-4">
@@ -284,6 +425,15 @@ export default function DailyOrganization() {
           >
             <Download size={16} />
             <span>{isExporting ? '...' : 'İndir'}</span>
+          </button>
+          <button 
+            onClick={shareWhatsApp}
+            disabled={isExporting}
+            className="flex-1 sm:flex-none flex items-center justify-center space-x-2 bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded-lg font-bold shadow-md transition-all active:scale-95 disabled:opacity-50"
+            title="WhatsApp ile Paylaş"
+          >
+            <Share2 size={16} />
+            <span>{isExporting ? '...' : 'WhatsApp'}</span>
           </button>
         </div>
       </div>
@@ -368,14 +518,14 @@ export default function DailyOrganization() {
             <div className="bg-[#2b3e94] rounded shadow-sm border border-white/20 overflow-hidden flex flex-col text-sm w-full">
               <div className="flex bg-[#1e2b6e] text-[#c2ff00] font-bold uppercase tracking-wider p-3">
                 <div className="w-[20%] px-2">Departman</div>
-                <div className="w-[55%] flex">
-                  <div className="w-[45.45%] px-2">Takım Arkadaşı</div>
-                  <div className="w-[27.27%] text-center">Shift</div>
-                  <div className="w-[27.27%] text-center">Mola</div>
+                <div className="w-[60%] flex">
+                  <div className="w-[45%] px-2">Takım Arkadaşı</div>
+                  <div className="w-[27.5%] text-center">Shift</div>
+                  <div className="w-[27.5%] text-center">Mola</div>
                 </div>
-                <div className="w-[25%] flex">
-                  <div className="w-[40%] text-center">Toplam Saat</div>
-                  <div className="w-[60%] text-center">Hedef Ciro</div>
+                <div className="w-[20%] flex text-xs sm:text-sm">
+                  <div className="w-1/2 text-center pr-1">Hedef Adet</div>
+                  <div className="w-1/2 text-center">Hedef Ciro</div>
                 </div>
               </div>
 
@@ -409,12 +559,21 @@ export default function DailyOrganization() {
                   deptTotalNet += calculateNetHours(s.shiftStart, s.shiftEnd, s.breakStart, s.breakEnd);
                 });
                 
-                totalStoreHours += deptTotalNet;
-                
                 const manualRev = manualDeptSales[dept.id];
                 const deptHedefCiro = manualRev !== undefined && manualRev !== '' ? Number(manualRev) : deptTotalNet * dept.targetProductivity;
-                
-                totalStoreRevenue += deptHedefCiro;
+
+                let calcQty = 0;
+                const ciroK = deptHedefCiro / 1000;
+                if (dept.id === 'quechua') calcQty = ciroK * 0.9;
+                else if (dept.id === 'kosu') calcQty = ciroK * 1.3;
+                else if (dept.id === 'su') calcQty = ciroK * 1.7;
+                else if (dept.id === 'triathlon') calcQty = ciroK * 7;
+                else if (dept.id === 'takim') calcQty = ciroK * 1.7;
+                else if (dept.id === 'bisiklet') calcQty = ciroK * 0.8;
+                else calcQty = ciroK * 1;
+
+                const manualQty = manualDeptQuantity[dept.id];
+                const deptHedefAdet = manualQty !== undefined && manualQty !== '' ? Number(manualQty) : calcQty;
 
                 return (
                   <div key={dept.id} className="flex relative border-t border-white/20 min-h-[75px] overflow-hidden">
@@ -430,7 +589,7 @@ export default function DailyOrganization() {
                       )}
                     </div>
 
-                    <div className="w-[55%] relative z-10 flex flex-col border-r border-white/20">
+                    <div className="w-[60%] relative z-10 flex flex-col border-r border-white/20">
                       {deptShifts.length === 0 ? (
                         <div className="flex w-full items-center justify-center p-4 text-white/50 italic font-medium">Shift bulunmuyor</div>
                       ) : (
@@ -440,7 +599,7 @@ export default function DailyOrganization() {
 
                           return (
                             <div key={shift.id} className={`flex w-full hover:bg-white/5 transition-colors ${!isLast ? 'border-b border-white/10' : ''}`}>
-                              <div className="w-[45.45%] p-2 border-r border-white/20 flex flex-col justify-center">
+                              <div className="w-[45%] p-2 border-r border-white/20 flex flex-col justify-center">
                                 {isEditMode ? (
                                   <div className="flex flex-col gap-2">
                                     <select 
@@ -449,7 +608,7 @@ export default function DailyOrganization() {
                                       className="bg-black/30 text-white border border-white/20 rounded px-2 py-1.5 outline-none focus:border-[#c2ff00]"
                                     >
                                       <option value="">Seçiniz...</option>
-                                      {getDeptUsers(dept.id).map(u => (
+                                      {getDeptUsers(dept.id).filter(u => u.id === shift.userId || !shifts.some(s => s.userId === u.id)).map(u => (
                                         <option key={u.id} value={u.id}>{u.name} {u.isCaptain===1?'(K)':''}</option>
                                       ))}
                                     </select>
@@ -467,7 +626,7 @@ export default function DailyOrganization() {
                                   </div>
                                 )}
                               </div>
-                              <div className="w-[27.27%] p-2 border-r border-white/20 flex items-center justify-center font-medium">
+                              <div className="w-[27.5%] p-2 border-r border-white/20 flex items-center justify-center font-medium">
                                 {isEditMode ? (
                                   <div className="flex flex-col items-center gap-1 w-full px-2">
                                     <select value={shift.shiftStart} onChange={(e) => handleShiftChange(shift.id, 'shiftStart', e.target.value)} className="bg-black/30 text-white px-1 py-1 rounded text-xs outline-none w-full text-center appearance-none">
@@ -481,7 +640,7 @@ export default function DailyOrganization() {
                                   </div>
                                 ) : <span>{shift.shiftStart} - {shift.shiftEnd}</span>}
                               </div>
-                              <div className="w-[27.27%] p-2 flex items-center justify-center font-medium">
+                              <div className="w-[27.5%] p-2 flex items-center justify-center font-medium">
                                 {isEditMode ? (
                                   <div className="flex flex-col items-center gap-1 w-full px-2">
                                     <select value={shift.breakStart} onChange={(e) => handleShiftChange(shift.id, 'breakStart', e.target.value)} className="bg-black/30 text-white px-1 py-1 rounded text-xs outline-none w-full text-center appearance-none">
@@ -501,24 +660,41 @@ export default function DailyOrganization() {
                       )}
                     </div>
 
-                    <div className="w-[25%] relative z-10 flex items-stretch">
-                      <div className="w-[40%] border-r border-white/20 p-2 flex flex-col items-center justify-center">
-                        <span className="font-bold text-[#c2ff00]/90 text-[16px]">{deptTotalNet.toFixed(1)} h</span>
-                      </div>
-                      <div className="w-[60%] p-2 flex items-center justify-end">
-                        {isEditMode ? (
-                          <input 
-                            type="number" 
-                            value={manualDeptSales[dept.id] !== undefined ? manualDeptSales[dept.id] : ''} 
-                            placeholder={Math.round(deptTotalNet * dept.targetProductivity)}
-                            onChange={(e) => setManualDeptSales(prev => ({...prev, [dept.id]: e.target.value}))}
-                            className="bg-black/30 text-white px-2 py-2 rounded outline-none w-full text-right font-black tracking-wider"
-                          />
-                        ) : (
-                          <span className="font-black text-lg tracking-wider text-right pr-4">
-                            {Math.round(deptHedefCiro).toLocaleString('tr-TR')} ₺
-                          </span>
-                        )}
+                    <div className="w-[20%] relative z-10 flex items-stretch">
+                      <div className="w-full flex">
+                        {/* HEDEF ADET */}
+                        <div className="w-1/2 p-2 border-r border-white/20 flex items-center justify-end">
+                          {isEditMode ? (
+                            <input 
+                              type="number" 
+                              value={manualDeptQuantity[dept.id] !== undefined ? manualDeptQuantity[dept.id] : ''} 
+                              placeholder={Math.round(calcQty)}
+                              onChange={(e) => setManualDeptQuantity(prev => ({...prev, [dept.id]: e.target.value}))}
+                              className="bg-black/30 text-white px-1 py-2 rounded outline-none w-full text-right font-black tracking-wider text-sm"
+                            />
+                          ) : (
+                            <span className="font-bold text-base tracking-wider text-right pr-2 text-white/90">
+                              {Math.round(deptHedefAdet)}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* HEDEF CIRO */}
+                        <div className="w-1/2 p-2 flex items-center justify-end">
+                          {isEditMode ? (
+                            <input 
+                              type="number" 
+                              value={manualDeptSales[dept.id] !== undefined ? manualDeptSales[dept.id] : ''} 
+                              placeholder={Math.round(deptTotalNet * dept.targetProductivity)}
+                              onChange={(e) => setManualDeptSales(prev => ({...prev, [dept.id]: e.target.value}))}
+                              className="bg-black/30 text-white px-1 py-2 rounded outline-none w-full text-right font-black tracking-wider text-sm"
+                            />
+                          ) : (
+                            <span className="font-black text-lg tracking-wider text-right pr-2">
+                              {Math.round(deptHedefCiro).toLocaleString('tr-TR')} ₺
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -527,12 +703,14 @@ export default function DailyOrganization() {
 
               {/* Mağaza Toplam Satırı */}
               <div className="flex bg-[#1e2b6e] border-t-2 border-[#c2ff00] text-white p-3 font-black text-lg shadow-inner">
-                <div className="w-[66%] text-right pr-4 tracking-widest text-[#c2ff00] uppercase">Mağaza Toplam:</div>
-                <div className="w-[15.25%] text-left pr-2 text-[#c2ff00]/80">
-                  {totalStoreHours.toFixed(1)} h
-                </div>
-                <div className="w-[18.75%] text-right pr-2">
-                   {Math.round(totalStoreRevenue).toLocaleString('tr-TR')} ₺
+                <div className="w-[80%] text-right pr-4 tracking-widest text-[#c2ff00] uppercase">Mağaza Toplam:</div>
+                <div className="w-[20%] flex pr-2">
+                   <div className="w-1/2 text-right pr-4 text-white/90 text-base flex items-center justify-end">
+                     {Math.round(totals.totalStoreQuantity)}
+                   </div>
+                   <div className="w-1/2 text-right">
+                     {Math.round(totals.totalStoreRevenue).toLocaleString('tr-TR')} ₺
+                   </div>
                 </div>
               </div>
 

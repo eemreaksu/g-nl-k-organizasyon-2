@@ -3,6 +3,7 @@ import { auth, db } from '../firebase/config';
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
@@ -80,8 +81,14 @@ export function AuthProvider({ children }) {
               name = data.name || firebaseUser.email;
               isCaptain = data.isCaptain || 0;
             } else {
-              role = 'user';
-              name = firebaseUser.email;
+              // Eğer users koleksiyonunda kayıt yoksa ama e-posta admin ise, admin yetkisi ver
+              if (firebaseUser.email === 'admin@mersin.local') {
+                role = 'admin';
+                name = 'Admin';
+              } else {
+                role = 'user';
+                name = firebaseUser.email;
+              }
             }
           }
 

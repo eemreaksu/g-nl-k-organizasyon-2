@@ -1,14 +1,41 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useData } from '../../context/DataContext';
 import { Activity } from 'lucide-react';
 
 export default function Productivity() {
   const { departments, setDepartments } = useData();
+  
+  // Local state to prevent cursor jumping and input lag
+  const [localTargets, setLocalTargets] = useState({});
+  const activeInputs = useRef(new Set());
+  const debounceTimers = useRef({});
+
+  useEffect(() => {
+    setLocalTargets(prev => {
+      const merged = { ...prev };
+      departments.forEach(dept => {
+        if (!activeInputs.current.has(dept.id)) {
+          merged[dept.id] = dept.targetProductivity;
+        }
+      });
+      return merged;
+    });
+  }, [departments]);
 
   const handleProductivityChange = (id, newTarget) => {
-    setDepartments(departments.map(dept => 
-      dept.id === id ? { ...dept, targetProductivity: Number(newTarget) } : dept
-    ));
+    setLocalTargets(prev => ({ ...prev, [id]: newTarget }));
+    activeInputs.current.add(id);
+    
+    if (debounceTimers.current[id]) clearTimeout(debounceTimers.current[id]);
+    
+    debounceTimers.current[id] = setTimeout(() => {
+      setDepartments(prevDepts => 
+        prevDepts.map(dept => 
+          dept.id === id ? { ...dept, targetProductivity: Number(newTarget) } : dept
+        )
+      );
+      activeInputs.current.delete(id);
+    }, 800);
   };
 
   return (
@@ -40,7 +67,7 @@ export default function Productivity() {
                   <div className="relative">
                     <input 
                       type="number" 
-                      value={dept.targetProductivity}
+                      value={localTargets[dept.id] !== undefined ? localTargets[dept.id] : dept.targetProductivity}
                       onChange={(e) => handleProductivityChange(dept.id, e.target.value)}
                       className="w-full bg-white border border-gray-300 rounded-lg p-3 text-lg font-black text-gray-800 focus:ring-2 focus:ring-[#c2ff00] focus:border-[#1e2b6e] transition-all"
                       placeholder="Örn: 1500"

@@ -10,22 +10,36 @@ service cloud.firestore {
     // Helper to check if user has admin role in Firestore
     function isAdmin() {
       return isAuthenticated() && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        (
+          (request.auth.token.email != null && (
+            request.auth.token.email.matches('^adm.*@.*') ||
+            request.auth.token.email.matches('^deca.*@.*') ||
+            request.auth.token.email.matches('^kptn.*@.*') ||
+            request.auth.token.email.matches('^ldr.*@.*') ||
+            request.auth.token.email.matches('^yonetim.*@.*') ||
+            request.auth.token.email == 'admin@mersin.local'
+          )) ||
+          request.auth.token.role == 'admin' || 
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
     }
 
     // Users collection rules
     match /users/{userId} {
-      // Users can read their own data, Admins can read everything
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      // Only admins can change user roles/data
       allow write: if isAdmin();
     }
 
-    // Default rules for all other collections (dailyOrganization, departments, etc.)
-    match /{document=**} {
-      // Any authenticated user can read the data
+    // Daily Data can be read by any authenticated user, but only written by admins
+    match /dailyData/{document=**} {
       allow read: if isAuthenticated();
-      // Only admins can modify the organization data
+      allow write: if isAdmin();
+    }
+
+    // Default rules for all other collections (config, etc.)
+    match /{document=**} {
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
   }

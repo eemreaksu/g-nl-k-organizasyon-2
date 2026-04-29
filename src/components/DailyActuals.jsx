@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Download, CalendarIcon, Edit3, CheckCircle, MapPin, Trophy, Star, TrendingUp, Users, Medal, Flame, Plus, Trash2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Download, Share2, CalendarIcon, Edit3, CheckCircle, MapPin, Trophy, Star, TrendingUp, Users, Medal, Flame, Plus, Trash2 } from 'lucide-react';
 import { toJpeg } from 'html-to-image';
 import { useData } from '../context/DataContext';
 
@@ -47,28 +47,89 @@ export default function DailyActuals({ selectedDate, setSelectedDate }) {
   const manualDeptSales = allDailySales[selectedDate] || {};
   const actualSales = allDailyActualSales[selectedDate] || {};
   const mvps = allDailyMVPs[selectedDate] || [];
-  
-  const setActualSales = (deptId, value) => {
-    updateDailyActualSales(selectedDate, prev => ({ ...prev, [deptId]: formatGmv(value).replace(/\s/g, '') }));
+
+  // ——— LOCAL STATE: GMV — input sıfırlanmasın diye ———
+  const [localActualSales, setLocalActualSales] = useState({});
+  const debounceTimers = useRef({});
+  const activeInputs = useRef(new Set());
+
+  useEffect(() => {
+    setLocalActualSales(prev => {
+      const merged = { ...prev };
+      Object.keys(actualSales).forEach(deptId => {
+        if (!activeInputs.current.has(deptId)) {
+          merged[deptId] = actualSales[deptId];
+        }
+      });
+      return merged;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actualSales]);
+
+  const handleGmvChange = (deptId, rawValue) => {
+    const formatted = formatGmv(rawValue);
+    const stripped  = formatted.replace(/\s/g, '');
+    setLocalActualSales(prev => ({ ...prev, [deptId]: stripped }));
+    activeInputs.current.add(deptId);
+    if (debounceTimers.current[deptId]) clearTimeout(debounceTimers.current[deptId]);
+    debounceTimers.current[deptId] = setTimeout(() => {
+      updateDailyActualSales(selectedDate, prev => ({ ...prev, [deptId]: stripped }));
+      activeInputs.current.delete(deptId);
+    }, 800);
   };
 
+  // ——— LOCAL STATE: MVP — seçim sıfırlanmasın diye ———
+  const [localMvps, setLocalMvps] = useState([]);
+  const mvpDebounceTimer = useRef(null);
+  const mvpPendingWrite = useRef(false);
+
+  // Firestore'dan gelen MVP değişikliği — sadece aktif düzenleme yoksa uygula
+  useEffect(() => {
+    if (!mvpPendingWrite.current) {
+      setLocalMvps(mvps);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mvps]);
+
   const handleMvpChange = (idx, userId) => {
-    updateDailyMVPs(selectedDate, prev => {
-      const newMvps = [...prev];
+    // Yerel state'i hemen güncelle
+    setLocalMvps(prev => {
+      const next = [...prev];
       if (userId) {
-        newMvps[idx] = userId;
+        next[idx] = userId;
       } else {
-        newMvps.splice(idx, 1);
+        next.splice(idx, 1);
       }
-      return newMvps;
+      return next;
     });
+
+    // Pending işaret
+    mvpPendingWrite.current = true;
+    if (mvpDebounceTimer.current) clearTimeout(mvpDebounceTimer.current);
+
+    // 600ms sonra Firestore'a yaz
+    mvpDebounceTimer.current = setTimeout(() => {
+      setLocalMvps(curr => {
+        updateDailyMVPs(selectedDate, () => curr);
+        mvpPendingWrite.current = false;
+        return curr;
+      });
+    }, 600);
   };
 
   const addMvp = () => {
-    if (mvps.length < 3) {
-      updateDailyMVPs(selectedDate, prev => [...prev, '']);
+    if (localMvps.length < 3) {
+      const next = [...localMvps, ''];
+      setLocalMvps(next);
+      mvpPendingWrite.current = true;
+      if (mvpDebounceTimer.current) clearTimeout(mvpDebounceTimer.current);
+      mvpDebounceTimer.current = setTimeout(() => {
+        updateDailyMVPs(selectedDate, () => next);
+        mvpPendingWrite.current = false;
+      }, 600);
     }
   };
+
 
   // Extract unique users from today's shifts
   const todayUserIds = [...new Set(shifts.filter(s => s.userId).map(s => s.userId))];
@@ -98,6 +159,62 @@ export default function DailyActuals({ selectedDate, setSelectedDate }) {
         if (wasEditMode) setIsEditMode(true);
       }
     }, 300); 
+  };
+
+  const shareWhatsApp = async () => {
+    if (!captureRef.current) return;
+    const wasEditMode = isEditMode;
+    setIsEditMode(false);
+    setIsExporting(true);
+
+    // ⚠️ Popup engelini aşmak için window.open'i hemen (senkron) çağır
+    const waText = encodeURIComponent(
+      `843 Mersin Turksport - Günün Gerçekleşenleri (${formattedDate})\n` +
+      `⬇️ Tablo dosya olarak eklendi, lütfen gönder.`
+    );
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    // Masaüstünde WhatsApp Web'i hemen aç (popup engelinden önce)
+    let waWindow = null;
+    if (!isMobile) {
+      waWindow = window.open(`https://web.whatsapp.com/send?text=${waText}`, '_blank');
+    }
+
+    setTimeout(async () => {
+      try {
+        const dataUrl = await toJpeg(captureRef.current, {
+          quality: 0.95,
+          backgroundColor: '#2b3e94',
+          pixelRatio: 2
+        });
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const file = new File([blob], `Gunun-Gerceklesenleri-${selectedDate}.jpg`, { type: 'image/jpeg' });
+
+        if (isMobile && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          // Mobil — native paylaşım menüsü (WhatsApp dahil)
+          await navigator.share({
+            title: `Günün Gerçekleşenleri - ${formattedDate}`,
+            text: `843 Mersin Turksport - Günün Gerçekleşenleri`,
+            files: [file]
+          });
+        } else {
+          // Masaüstü — Görsel indir (WhatsApp Web zaten açıldı)
+          const link = document.createElement('a');
+          link.download = `Gunun-Gerceklesenleri-${selectedDate}.jpg`;
+          link.href = dataUrl;
+          link.click();
+        }
+      } catch (err) {
+        if (err?.name !== 'AbortError') console.error('Paylaşım hatası:', err);
+        // Pencere açılamadıysa mevcut sekmede aç
+        if (waWindow === null && !isMobile) {
+          window.location.href = `https://web.whatsapp.com/send?text=${waText}`;
+        }
+      } finally {
+        setIsExporting(false);
+        if (wasEditMode) setIsEditMode(true);
+      }
+    }, 300);
   };
 
   const formattedDate = new Date(selectedDate).toLocaleDateString('tr-TR', { 
@@ -140,6 +257,15 @@ export default function DailyActuals({ selectedDate, setSelectedDate }) {
           >
             <Download size={16} />
             <span>{isExporting ? '...' : 'İndir'}</span>
+          </button>
+          <button 
+            onClick={shareWhatsApp}
+            disabled={isExporting}
+            className="flex-1 sm:flex-none flex items-center justify-center space-x-2 bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded-lg font-bold shadow-md transition-all active:scale-95 disabled:opacity-50"
+            title="WhatsApp ile Paylaş"
+          >
+            <Share2 size={16} />
+            <span>{isExporting ? '...' : 'WhatsApp'}</span>
           </button>
         </div>
       </div>
@@ -222,7 +348,7 @@ export default function DailyActuals({ selectedDate, setSelectedDate }) {
                     <Star className="text-yellow-400 fill-yellow-400" size={20} /> 
                     Günün MVP'leri
                   </h4>
-                  {isEditMode && mvps.length < 3 && (
+                  {isEditMode && localMvps.length < 3 && (
                     <button onClick={addMvp} className="flex items-center gap-1 text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg transition-colors font-bold tracking-wide">
                       <Plus size={14} /> Ekle
                     </button>
@@ -230,10 +356,10 @@ export default function DailyActuals({ selectedDate, setSelectedDate }) {
                </div>
                
                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-10">
-                  {mvps.length === 0 && !isEditMode && (
+                  {localMvps.length === 0 && !isEditMode && (
                     <div className="col-span-full text-white/50 italic font-medium text-center py-4">Henüz MVP seçilmedi.</div>
                   )}
-                  {mvps.map((mvpId, idx) => {
+                  {localMvps.map((mvpId, idx) => {
                     const userObj = users.find(u => u.id === mvpId);
                     return (
                       <div key={idx} className="bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-lg p-4 flex flex-col items-center justify-center relative group min-h-[100px]">
@@ -285,7 +411,7 @@ export default function DailyActuals({ selectedDate, setSelectedDate }) {
                 const manualRev = manualDeptSales[dept.id];
                 const deptHedefCiro = manualRev !== undefined && manualRev !== '' ? Number(manualRev) : deptTotalNet * dept.targetProductivity;
 
-                const actSales = actualSales[dept.id] || '';
+                const actSales = localActualSales[dept.id] || '';
 
                 return (
                   <div key={dept.id} className="flex relative border-t border-white/20 min-h-[60px] overflow-hidden hover:bg-white/5 transition-colors">
@@ -306,7 +432,7 @@ export default function DailyActuals({ selectedDate, setSelectedDate }) {
                               type="text" 
                               value={formatGmv(actSales)} 
                               placeholder="0"
-                              onChange={(e) => setActualSales(dept.id, e.target.value)}
+                              onChange={(e) => handleGmvChange(dept.id, e.target.value)}
                               className="bg-black/30 text-[#c2ff00] px-3 py-2 rounded-lg outline-none w-full text-center font-black tracking-widest border border-white/10 focus:border-[#c2ff00]/50 transition-colors"
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 font-bold text-xs pointer-events-none">₺</span>
@@ -320,6 +446,35 @@ export default function DailyActuals({ selectedDate, setSelectedDate }) {
                   </div>
                 );
               })}
+              {(() => {
+                let totalHedefCiro = 0;
+                let totalGmv = 0;
+                departments.forEach(dept => {
+                  const deptShifts = shifts.filter(s => s.deptId === dept.id);
+                  let deptTotalNet = 0;
+                  deptShifts.forEach(s => { deptTotalNet += calculateNetHours(s.shiftStart, s.shiftEnd, s.breakStart, s.breakEnd); });
+                  const manualRev = manualDeptSales[dept.id];
+                  totalHedefCiro += manualRev !== undefined && manualRev !== '' ? Number(manualRev) : deptTotalNet * dept.targetProductivity;
+                  totalGmv += Number((localActualSales[dept.id] || '').replace(/\s/g, '')) || 0;
+                });
+                const isAchieved = totalGmv > 0 && totalGmv >= totalHedefCiro;
+                return (
+                  <div className="flex bg-[#1e2b6e] border-t-2 border-[#c2ff00] text-white p-3 font-black text-base shadow-inner">
+                    <div className="w-[30%] px-2 text-[#c2ff00] uppercase tracking-widest text-sm flex items-center">TOPLAM</div>
+                    <div className="w-[35%] text-center">
+                      <span className="font-black text-lg tracking-wider text-white/90">
+                        {Math.round(totalHedefCiro).toLocaleString('tr-TR')} ₺
+                      </span>
+                    </div>
+                    <div className="w-[35%] text-center">
+                      <span className={`font-black text-xl tracking-widest ${isAchieved ? 'text-[#c2ff00]' : totalGmv > 0 ? 'text-white' : 'text-white/40'}`}>
+                        {totalGmv > 0 ? `${totalGmv.toLocaleString('tr-TR')} ₺` : '-'}
+                      </span>
+                      {isAchieved && <span className="ml-2 text-xs text-[#c2ff00] font-bold">✓ Hedef Aşıldı!</span>}
+                    </div>
+                  </div>
+                );
+              })()}
 
             </div>
             

@@ -39,6 +39,7 @@ export function DataProvider({ children }) {
   
   const [allDailyShifts, setAllDailyShiftsLocal] = useState({});
   const [allDailySales, setAllDailySalesLocal] = useState({});
+  const [allDailyQuantity, setAllDailyQuantityLocal] = useState({});
   const [allDailyActualSales, setAllDailyActualSalesLocal] = useState({});
   const [allDailyMVPs, setAllDailyMVPsLocal] = useState({});
   const [isReady, setIsReady] = useState(false);
@@ -91,17 +92,20 @@ export function DataProvider({ children }) {
     const unsubscribeDaily = onSnapshot(collection(db, 'dailyData'), (snapshot) => {
       const newShifts = {};
       const newSales = {};
+      const newQuantity = {};
       const newActualSales = {};
       const newMVPs = {};
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
         newShifts[docSnap.id] = data.shifts || [];
         newSales[docSnap.id] = data.manualSales || {};
+        newQuantity[docSnap.id] = data.manualQuantity || {};
         newActualSales[docSnap.id] = data.actualSales || {};
         newMVPs[docSnap.id] = data.mvps || [];
       });
       setAllDailyShiftsLocal(newShifts);
       setAllDailySalesLocal(newSales);
+      setAllDailyQuantityLocal(newQuantity);
       setAllDailyActualSalesLocal(newActualSales);
       setAllDailyMVPsLocal(newMVPs);
     });
@@ -148,6 +152,15 @@ export function DataProvider({ children }) {
     });
   };
 
+  const updateDailyQuantity = (date, nextQtyOrFn) => {
+    setAllDailyQuantityLocal(prev => {
+      const current = prev[date] || {};
+      const next = typeof nextQtyOrFn === 'function' ? nextQtyOrFn(current) : nextQtyOrFn;
+      setDoc(doc(db, 'dailyData', date), { manualQuantity: next }, { merge: true });
+      return { ...prev, [date]: next };
+    });
+  };
+
   const updateDailyActualSales = (date, nextSalesOrFn) => {
     setAllDailyActualSalesLocal(prev => {
       const current = prev[date] || {};
@@ -173,6 +186,7 @@ export function DataProvider({ children }) {
     rekor, setRekor,
     allDailyShifts, updateDailyShifts,
     allDailySales, updateDailySales,
+    allDailyQuantity, updateDailyQuantity,
     allDailyActualSales, updateDailyActualSales,
     allDailyMVPs, updateDailyMVPs
   };

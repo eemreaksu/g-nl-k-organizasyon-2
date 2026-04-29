@@ -255,11 +255,11 @@ export default function Login() {
         </motion.div>
       </div>
       
-      <style dangerouslySetInnerHTML={{__html: `
+      <style>{`
         @keyframes shimmer {
           100% { transform: translateX(100%); }
         }
-      `}} />
+      `}</style>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { Calendar as CalendarIcon, Save } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDaysInMonth, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
 export default function CaptainOrganization() {
@@ -38,8 +38,8 @@ export default function CaptainOrganization() {
        if (userShiftIndex !== -1) {
           currentShifts[userShiftIndex].role = role;
        } else if (userObj) {
-          currentShifts.push({
-             id: `auto-${Date.now()}-${role}`,
+           currentShifts.push({
+             id: `auto-${crypto.randomUUID()}-${role}`,
              deptId: userObj.deptId,
              userId: userObj.id,
              shiftStart: '09:00',
@@ -55,7 +55,6 @@ export default function CaptainOrganization() {
   };
 
   const captains = users.filter(u => u.isCaptain === 1);
-  const others = users.filter(u => u.isCaptain === 0);
 
   return (
     <div className="space-y-6">

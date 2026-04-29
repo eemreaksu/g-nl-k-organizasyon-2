@@ -105,8 +105,7 @@ export default function AdminLayout() {
           <Outlet />
         </div>
       </main>
-      
-      <style dangerouslySetInnerHTML={{__html: `
+      <style>{`
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
         }
@@ -114,7 +113,7 @@ export default function AdminLayout() {
           -ms-overflow-style: none;  /* IE and Edge */
           scrollbar-width: none;  /* Firefox */
         }
-      `}} />
+      `}</style>
     </div>
   );
 }
