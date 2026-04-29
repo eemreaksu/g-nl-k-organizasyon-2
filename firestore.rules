@@ -8,15 +8,18 @@ service cloud.firestore {
     }
 
     // Helper to check if user has admin role in Firestore
+    // WARNING: Admin privileges are verified SERVER-SIDE via JWT token claims
+    // Client-side state manipulation CANNOT bypass these checks.
     function isAdmin() {
       return isAuthenticated() && 
         (
           (request.auth.token.email != null && (
-            request.auth.token.email.matches('^adm.*@.*') ||
-            request.auth.token.email.matches('^deca.*@.*') ||
-            request.auth.token.email.matches('^kptn.*@.*') ||
-            request.auth.token.email.matches('^ldr.*@.*') ||
-            request.auth.token.email.matches('^yonetim.*@.*') ||
+            // Domain-restricted patterns — ONLY @mersin.local allowed
+            request.auth.token.email.matches('^adm.*@mersin\\.local$') ||
+            request.auth.token.email.matches('^deca.*@mersin\\.local$') ||
+            request.auth.token.email.matches('^kptn.*@mersin\\.local$') ||
+            request.auth.token.email.matches('^ldr.*@mersin\\.local$') ||
+            request.auth.token.email.matches('^yonetim.*@mersin\\.local$') ||
             request.auth.token.email == 'admin@mersin.local'
           )) ||
           request.auth.token.role == 'admin' || 

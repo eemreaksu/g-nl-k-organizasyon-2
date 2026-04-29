@@ -92,7 +92,12 @@ export function AuthProvider({ children }) {
             }
           }
 
-          setCurrentUser({
+          // ─── Immutable user object ────────────────────────────────────
+          // Object.freeze() ile currentUser objesini donduruyoruz.
+          // Bu, console'dan doğrudan mutation'u (örn. currentUser.role='admin')
+          // engeller. React DevTools ile hâlâ değiştirilebilir ama en azından
+          // console tabanlı basit saldırılar önlenir.
+          const userProfile = Object.freeze({
             uid: firebaseUser.uid,
             email: firebaseUser.email,
             role,
@@ -100,6 +105,7 @@ export function AuthProvider({ children }) {
             isCaptain,
           });
 
+          setCurrentUser(userProfile);
           startTokenRefresh();
         } catch {
           // Hata detayı sızdırma — loglama servisi kullanılabilir

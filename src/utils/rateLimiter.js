@@ -1,24 +1,25 @@
 /**
  * Client-side rate limiter for login attempts.
- * Uses sessionStorage so it resets if the tab is closed.
+ * Uses MODULE-LEVEL MEMORY so it CANNOT be bypassed via console/sessionStorage.
  * Key: attempt count + lockout timestamp.
+ * NOTE: This resets on page reload. Firebase Auth's own server-side rate limiting
+ * provides the real protection; this is UX-layer defence only.
  */
 
 const MAX_ATTEMPTS = 5;          // 5 başarısız deneme
 const LOCKOUT_DURATION = 5 * 60 * 1000; // 5 dakika kilit
-const STORAGE_KEY = 'deca_login_attempts';
+
+// Module-level state — NOT accessible from browser console
+let attemptCount = 0;
+let lockedUntil = null;
 
 function getAttemptData() {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : { count: 0, lockedUntil: null };
-  } catch {
-    return { count: 0, lockedUntil: null };
-  }
+  return { count: attemptCount, lockedUntil };
 }
 
 function saveAttemptData(data) {
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  attemptCount = data.count ?? 0;
+  lockedUntil = data.lockedUntil ?? null;
 }
 
 export function checkRateLimit() {
@@ -51,7 +52,7 @@ export function recordFailedAttempt() {
 }
 
 export function clearAttempts() {
-  sessionStorage.removeItem(STORAGE_KEY);
+  saveAttemptData({ count: 0, lockedUntil: null });
 }
 
 export function getRemainingAttempts() {

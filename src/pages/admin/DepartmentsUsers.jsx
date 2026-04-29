@@ -11,23 +11,13 @@ export default function DepartmentsUsers() {
     name: '',
     deptId: departments[0]?.id || '',
     isCaptain: 0,
-    workType: 'Full Time',
-    password: ''
+    workType: 'Full Time'
   });
 
   const generateUserCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
     for (let i = 0; i < 5; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-  };
-
-  const generateRandomPassword = () => {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < 6; i++) {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
@@ -43,8 +33,7 @@ export default function DepartmentsUsers() {
         name: newUser.name,
         deptId: newUser.deptId,
         isCaptain: Number(newUser.isCaptain),
-        workType: newUser.workType,
-        password: newUser.password || u.password
+        workType: newUser.workType
       } : u));
     } else {
       const userCode = generateUserCode();
@@ -54,15 +43,14 @@ export default function DepartmentsUsers() {
         deptId: newUser.deptId,
         isCaptain: Number(newUser.isCaptain),
         workType: newUser.workType,
-        userCode,
-        password: newUser.password || generateRandomPassword()
+        userCode
       };
       setUsers([...users, newEntry]);
     }
     
     setIsAdding(false);
     setEditingId(null);
-    setNewUser({ name: '', deptId: departments[0]?.id || '', isCaptain: 0, workType: 'Full Time', password: '' });
+    setNewUser({ name: '', deptId: departments[0]?.id || '', isCaptain: 0, workType: 'Full Time' });
   };
 
   const handleDelete = (id) => {
@@ -81,7 +69,7 @@ export default function DepartmentsUsers() {
             setIsAdding(!isAdding);
             if (!isAdding) {
               setEditingId(null);
-              setNewUser({ name: '', deptId: departments[0]?.id || '', isCaptain: 0, workType: 'Full Time', password: '' });
+              setNewUser({ name: '', deptId: departments[0]?.id || '', isCaptain: 0, workType: 'Full Time' });
             }
           }}
           className="flex items-center space-x-2 bg-[#c2ff00] hover:bg-[#a8e600] text-[#1e2b6e] px-4 py-2 rounded-lg font-bold shadow-md transition-all active:scale-95"
@@ -138,17 +126,7 @@ export default function DepartmentsUsers() {
                 <option value="Part Time">Part Time</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Şifre</label>
-              <input 
-                type="text" 
-                value={newUser.password}
-                onChange={e => setNewUser({...newUser, password: e.target.value})}
-                className="w-full border border-gray-300 rounded p-2"
-                placeholder={editingId ? 'Boş bırakırsanız değişmez' : 'Boş bırakırsanız 6 haneli rastgele'}
-              />
-            </div>
-            <div>
+            <div className="lg:col-span-2">
               <button type="submit" className="w-full bg-[#1e2b6e] text-white p-2 text-sm rounded font-bold hover:bg-blue-800 transition-colors">
                 {editingId ? 'Kaydet' : 'Oluştur'}
               </button>
@@ -200,8 +178,7 @@ export default function DepartmentsUsers() {
                               name: user.name,
                               deptId: user.deptId,
                               isCaptain: user.isCaptain,
-                              workType: user.workType || 'Full Time',
-                              password: ''
+                              workType: user.workType || 'Full Time'
                             });
                             setIsAdding(true);
                             window.scrollTo({ top: 0, behavior: 'smooth' });

@@ -62,28 +62,15 @@ export function DataProvider({ children }) {
         if (data.rekor) setRekorLocal(data.rekor);
         setIsReady(true);
       } else {
-        // SEED from localStorage if it exists, otherwise use INITIAL
-        const lsDepts = JSON.parse(window.localStorage.getItem('decathlon_departments') || "null");
-        const lsUsers = JSON.parse(window.localStorage.getItem('decathlon_users') || "null");
-        const lsCapt = JSON.parse(window.localStorage.getItem('decathlon_captain_schedule') || "null");
-        const lsRekor = JSON.parse(window.localStorage.getItem('decathlon_rekor') || "null");
-        
+        // Firestore dokümanı yoksa sadece INITIAL verileri kullan.
+        // localStorage'dan seed alma KALDIRILDI — güvenlik riski:
+        // Bir saldırgan localStorage'a zararlı veri yazıp sayfayı yenileyerek
+        // Firestore'a poisoned data enjekte edebilirdi.
         setDoc(doc(db, 'config', 'global'), {
-          departments: lsDepts || INITIAL_DEPARTMENTS,
-          users: lsUsers || INITIAL_USERS,
-          captainSchedule: lsCapt || {},
-          rekor: lsRekor || '2 292 000'
-        });
-
-        // Seed daily data from localStorage
-        const lsShifts = JSON.parse(window.localStorage.getItem('decathlon_daily_shifts') || "{}");
-        const lsSales = JSON.parse(window.localStorage.getItem('decathlon_daily_sales') || "{}");
-        const allDates = new Set([...Object.keys(lsShifts), ...Object.keys(lsSales)]);
-        allDates.forEach(date => {
-          setDoc(doc(db, 'dailyData', date), {
-            shifts: lsShifts[date] || [],
-            manualSales: lsSales[date] || {}
-          }, { merge: true });
+          departments: INITIAL_DEPARTMENTS,
+          users: INITIAL_USERS,
+          captainSchedule: {},
+          rekor: '2 292 000'
         });
       }
     });
